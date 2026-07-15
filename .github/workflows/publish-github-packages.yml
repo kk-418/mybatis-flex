@@ -11,6 +11,11 @@ on:
         required: true
         default: 'v1.11.8.b'
         type: string
+      replace_existing:
+        description: '删除同标签失败发布的 Maven 制品后重发'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -52,6 +57,28 @@ jobs:
 
           test "${revision}" = '1.11.8.b'
           test "${actual_tag}" = "v${revision}"
+
+      - name: 清理失败发布的同版本制品
+        if: github.event_name == 'workflow_dispatch' && inputs.replace_existing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER}"
+          version='1.11.8.b'
+
+          gh api --paginate "/users/${owner}/packages?package_type=maven&per_page=100" \
+            --jq ".[] | select(.repository.full_name == \"${GITHUB_REPOSITORY}\") | select(.name | startswith(\"com.mybatis-flex.\")) | .name" |
+          while IFS= read -r package_name; do
+            encoded_name="$(jq -nr --arg value "${package_name}" '$value | @uri')"
+            gh api --paginate "/users/${owner}/packages/maven/${encoded_name}/versions?per_page=100" \
+              --jq ".[] | select(.name == \"${version}\") | .id" |
+            while IFS= read -r version_id; do
+              gh api --method DELETE \
+                "/users/${owner}/packages/maven/${encoded_name}/versions/${version_id}"
+            done
+          done
 
       - name: 运行事务模块测试和构建校验
         run: mvn -B -ntp -pl mybatis-flex-core,mybatis-flex-spring -am clean verify
