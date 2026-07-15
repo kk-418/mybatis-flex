@@ -70,7 +70,7 @@
         <maven.compiler.target>8</maven.compiler.target>
 
         <!-- Mybatis-Flex 版本 -->
-        <revision>1.11.8</revision>
+        <revision>1.11.8.b</revision>
 
         <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
         <xml-maven-plugin.version>1.1.0</xml-maven-plugin.version>
@@ -332,32 +332,6 @@
                 </executions>
             </plugin>
             <!-- Javadoc -->
-            <!-- Gpg Signature -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-gpg-plugin</artifactId>
-                <version>1.6</version>
-                <executions>
-                    <execution>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>sign</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
-                <groupId>org.sonatype.central</groupId>
-                <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.7.0</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <publishingServerId>central</publishingServerId>
-                    <autoPublish>true</autoPublish>
-                </configuration>
-            </plugin>
-
         </plugins>
     </build>
 
@@ -373,9 +347,15 @@
     <!-- mvn deploy -e -->
 
     <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/kk-418/mybatis-flex</url>
+        </repository>
         <snapshotRepository>
-            <id>central</id>
-            <url>https://central.sonatype.com/</url>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/kk-418/mybatis-flex</url>
         </snapshotRepository>
     </distributionManagement>
 

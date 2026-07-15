@@ -1,0 +1,62 @@
+name: 发布 Fork Maven 制品
+
+on:
+  push:
+    tags:
+      - 'v1.11.8.b'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '待发布的 Git 标签'
+        required: true
+        default: 'v1.11.8.b'
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-maven-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: 测试并发布 Maven 制品
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出发布标签
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: 设置 JDK 和 GitHub Packages 凭据
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: 校验版本和标签
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(mvn help:evaluate -Dexpression=revision -q -DforceStdout)"
+          actual_tag="$(git describe --tags --exact-match HEAD)"
+
+          test "${revision}" = '1.11.8.b'
+          test "${actual_tag}" = "v${revision}"
+
+      - name: 运行事务模块测试和构建校验
+        run: mvn -B -ntp -pl mybatis-flex-core,mybatis-flex-spring -am clean verify
+
+      - name: 发布到 GitHub Packages
+        run: mvn -B -ntp deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
