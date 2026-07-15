@@ -21,6 +21,7 @@ import com.mybatisflex.core.exception.FlexExceptions;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,11 +52,14 @@ public class EnumWrapper<E extends Enum<E>> {
 
         if (hasEnumValueAnnotation) {
             String getterMethodName = "get" + StringUtil.firstCharToUpperCase(enumValueField.getName());
+            Method getter = ClassUtil.getFirstMethod(enumClass,
+                method -> method.getName().equals(getterMethodName) && Modifier.isPublic(method.getModifiers()));
 
-            Method getter = ClassUtil.getFirstMethod(enumClass, method -> {
-                String methodName = method.getName();
-                return methodName.equals(getterMethodName) && Modifier.isPublic(method.getModifiers());
-            });
+            if (getter == null) {
+                String fluentGetterMethodName = enumValueField.getName();
+                getter = ClassUtil.getFirstMethod(enumClass,
+                    method -> method.getName().equals(fluentGetterMethodName) && Modifier.isPublic(method.getModifiers()));
+            }
 
             propertyType = ClassUtil.getWrapType(enumValueField.getType());
 
@@ -74,16 +78,38 @@ public class EnumWrapper<E extends Enum<E>> {
             Method enumValueMethod = ClassUtil.getFirstMethodByAnnotation(enumClass, EnumValue.class);
             if (enumValueMethod != null) {
                 String methodName = enumValueMethod.getName();
-                if (!(methodName.startsWith("get") && methodName.length() > 3)) {
-                    throw new IllegalStateException("Can not find get method \"" + methodName + "()\" in enum: " + enumClass.getName());
+                String enumValueFieldName;
+                if (methodName.startsWith("get")) {
+                    if (methodName.length() == 3) {
+                        throw new IllegalStateException("Can not find get method \"" + methodName + "()\" in enum: " + enumClass.getName());
+                    }
+                    enumValueFieldName = StringUtil.firstCharToLowerCase(enumValueMethod.getName().substring(3));
+                } else {
+                    enumValueFieldName = enumValueMethod.getName().toLowerCase();
                 }
+                enumValueField = ClassUtil.getFirstField(enumClass, field -> enumValueFieldName.equals(field.getName()));
+                // If the corresponding field is not found, but there is an annotated method, still use the method
+                if (enumValueField != null) {
+                    propertyType = ClassUtil.getWrapType(enumValueField.getType());
+                } else {
+                    // Check method return type, throw error if it's generic, otherwise use return type
+                    Type genericReturnType = enumValueMethod.getGenericReturnType();
+                    Class<?> returnType = enumValueMethod.getReturnType();
+
+                    // Check if return type is parameterized type (e.g. List<String>) or type variable (e.g. T)
+                    if (genericReturnType instanceof java.lang.reflect.ParameterizedType ||
+                        genericReturnType instanceof java.lang.reflect.TypeVariable) {
+                        // If return type is generic, throw exception
+                        throw new IllegalStateException("Can not find field \"" + enumValueFieldName + "()\" in enum: " + enumClass.getName()
+                            + ", and the method return type is generic which is not supported: " + genericReturnType.getTypeName());
+                    } else {
+                        // No longer throw exception, directly use the found method
+                        propertyType = ClassUtil.getWrapType(returnType);
+                    }
+                }
+
                 this.getterMethod = enumValueMethod;
                 this.hasEnumValueAnnotation = true;
-                Class<?> returnType = enumValueMethod.getReturnType();
-                if (returnType.isPrimitive()) {
-                    returnType = ConvertUtil.primitiveToBoxed(returnType);
-                }
-                this.propertyType = returnType;
             }
         }
     }
@@ -105,7 +131,7 @@ public class EnumWrapper<E extends Enum<E>> {
             } else if (property != null) {
                 return property.get(object);
             } else {
-                //noinspection unchecked
+                // noinspection unchecked
                 return ((E) object).name();
             }
         } catch (Exception e) {

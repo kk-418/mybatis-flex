@@ -54,7 +54,13 @@ import java.util.Optional;
 @ConditionalOnMybatisFlexDatasource()
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(MybatisFlexProperties.class)
-@ConditionalOnClass({SqlSessionFactory.class, SqlSessionFactoryBean.class})
+@ConditionalOnClass(
+    value = {SqlSessionFactory.class, SqlSessionFactoryBean.class},
+    name = {
+        "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
+        "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
+    }
+)
 @AutoConfigureBefore(value = {DataSourceAutoConfiguration.class, DataSourceTransactionManagerAutoConfiguration.class}
     , name = {"com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure",
     "com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure"})

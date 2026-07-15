@@ -26,6 +26,7 @@ import org.apache.ibatis.logging.LogFactory;
 import javax.sql.DataSource;
 import java.lang.reflect.Method;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.regex.Pattern;
@@ -65,6 +66,12 @@ public class DbTypeUtil {
                     return sqlserverDbType;
                 }
             }
+            if (jdbcUrl.contains(":oceanbase:")) {
+                DbType oceanbaseDbType = getOceanBaseDbType(dataSource);
+                if (oceanbaseDbType != null) {
+                    return oceanbaseDbType;
+                }
+            }
             return parseDbType(jdbcUrl);
         }
 
@@ -102,7 +109,25 @@ public class DbTypeUtil {
             return null;
         }
     }
+    private static DbType getOceanBaseDbType(DataSource dataSource) {
+            try (Connection conn = dataSource.getConnection()) {
+                DatabaseMetaData metaData = conn.getMetaData();
+                String dbProductName = metaData.getDatabaseProductName();
+                // 根据返回结果判断模式
+                if ("Oracle".equalsIgnoreCase(dbProductName)) {
+                    return DbType.OCEAN_BASE_ORACLE;
+                } else if ("MySQL".equalsIgnoreCase(dbProductName)) {
+                    return DbType.OCEAN_BASE;
+                } else if ("OceanBase".equalsIgnoreCase(dbProductName)) {
+                    return DbType.OCEAN_BASE;
+                }
 
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+            return null;
+    }
     /**
      * 通过数据源中获取 jdbc 的 url 配置
      * 符合 HikariCP, druid, c3p0, DBCP, beecp 数据源框架 以及 MyBatis UnpooledDataSource 的获取规则
@@ -185,7 +210,7 @@ public class DbTypeUtil {
             return DbType.IMPALA;
         } else if (jdbcUrl.contains(":informix")) {
             return DbType.INFORMIX;
-        } else if (jdbcUrl.contains(":kingbase\\d*:") && isMatchedRegex(":kingbase\\d*:", jdbcUrl)) {
+        } else if (isMatchedRegex(":kingbase\\d*:", jdbcUrl)) {
             return DbType.KINGBASE_ES;
         } else if (jdbcUrl.contains(":lealone:")) {
             return DbType.LEALONE;
@@ -223,7 +248,7 @@ public class DbTypeUtil {
             return DbType.SUNDB;
         } else if (jdbcUrl.contains(":sybase:")) {
             return DbType.SYBASE;
-        } else if (jdbcUrl.contains(":taos:") || jdbcUrl.contains(":taos-rs:")) {
+        } else if (jdbcUrl.contains(":taos:") || jdbcUrl.contains(":taos-rs:")  || jdbcUrl.contains(":taos-ws:")) {
             return DbType.TDENGINE;
         } else if (jdbcUrl.contains(":trino:")) {
             return DbType.TRINO;
@@ -240,7 +265,7 @@ public class DbTypeUtil {
         } else if (jdbcUrl.contains(":yasdb:")) {
             return DbType.YASDB;
         } else {
-            return DbType.OTHER;
+            return null;
         }
     }
 
