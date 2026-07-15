@@ -72,12 +72,18 @@ jobs:
             --jq ".[] | select(.repository.full_name == \"${GITHUB_REPOSITORY}\") | select(.name | startswith(\"com.mybatis-flex.\")) | .name" |
           while IFS= read -r package_name; do
             encoded_name="$(jq -nr --arg value "${package_name}" '$value | @uri')"
-            gh api --paginate "/users/${owner}/packages/maven/${encoded_name}/versions?per_page=100" \
-              --jq ".[] | select(.name == \"${version}\") | .id" |
+            versions="$(gh api --paginate "/users/${owner}/packages/maven/${encoded_name}/versions?per_page=100")"
+            target_ids="$(jq -r --arg version "${version}" '.[] | select(.name == $version) | .id' <<<"${versions}")"
+            if [[ -z "${target_ids}" ]]; then
+              continue
+            fi
+            if [[ "$(jq 'length' <<<"${versions}")" -eq 1 ]]; then
+              gh api --method DELETE "/users/${owner}/packages/maven/${encoded_name}"
+              continue
+            fi
             while IFS= read -r version_id; do
-              gh api --method DELETE \
-                "/users/${owner}/packages/maven/${encoded_name}/versions/${version_id}"
-            done
+              gh api --method DELETE "/users/${owner}/packages/maven/${encoded_name}/versions/${version_id}"
+            done <<<"${target_ids}"
           done
 
       - name: 运行事务模块测试和构建校验
